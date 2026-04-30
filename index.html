@@ -49,6 +49,7 @@
         box-sizing: border-box; 
       }
       .start-btn:hover { background-color: #C62828; }
+      .start-btn:disabled { background-color: #999; cursor: not-allowed; }
 
       /* EXAM INTERFACE */
       #exam-interface { display: none; }
@@ -93,7 +94,7 @@
         <br>
         <input type="text" id="userNameInput" class="name-input" placeholder="Full Name (eg. Juan Delacruz)">
         <div style="background-color: #FAFAFA; padding: 15px; margin-bottom: 20px; border-radius: 6px;">
-            <p style="margin: 0 0 8px 0; font-size: 16px; color: #333;">&#x23F1;&#xFE0F; <b>Allotted Time:</b> <b style="color: #A50034;">45 Minutes</b></p>
+            <p style="margin: 0 0 8px 0; font-size: 16px; color: #333;">&#x23F1;&#xFE0F; <b>Allotted Time:</b> <b id="uiTimeLimit" style="color: #A50034;">Fetching from server...</b></p>
             <p style="margin: 0; font-size: 16px; color: #333;">&#x1F512; <b>Session Expiration:</b> Approx. <b style="color: #A50034;" id="predicted-end">Calculating...</b></p>
         </div>
         <h3 style="font-size: 16px; color: #333; margin-bottom: 10px;">Guidelines:</h3>
@@ -105,7 +106,7 @@
             <li>Click "I HAVE SUBMITTED" at the top when finished.</li>
         </ul>
         <div style="text-align: center;">
-            <button class="start-btn" onclick="startExam()">START EXAM</button>
+            <button id="startBtn" class="start-btn" onclick="startExam()" disabled>CONNECTING...</button>
         </div>
     </div>
   </div>
@@ -172,7 +173,7 @@
 
   <script>
     /* --- CONFIGURATION --- */
-    const EXAM_DURATION = 45 * 60; 
+    let EXAM_DURATION = 45 * 60; 
     const WARNING_TIME = 5 * 60;   
     const GRACE_DURATION = 1 * 60; 
     const COOLDOWN_DURATION = 1 * 60 * 60; 
@@ -182,6 +183,43 @@
 
     const API_URL = "https://script.google.com/macros/s/AKfycbzWvYkbgYHt5herM8V0iW_DJ7o7SLYbIuYgidja6F2QqAkUrh399OSj1_sl8B1U6eJ8/exec";
     /* --------------------- */
+   // --- NEW: FETCH DYNAMIC SETTINGS FROM GOOGLE SHEETS ---
+    function fetchExamSettings() {
+        const uiTimeLimit = document.getElementById("uiTimeLimit");
+        const startBtn = document.getElementById("startBtn");
+
+        fetch(API_URL + "?action=getSettings")
+            .then(res => res.json())
+            .then(data => {
+                if (data.timeLimit) {
+                    EXAM_DURATION = data.timeLimit * 60;
+                    if(uiTimeLimit) uiTimeLimit.textContent = data.timeLimit + " Minutes";
+                    
+                    const timerDisplay = document.getElementById('timer');
+                    if(timerDisplay && !mainStart && !graceStart) {
+                        timerDisplay.textContent = data.timeLimit + ":00";
+                    }
+                }
+                
+                // Unlock the Start button
+                if(startBtn) {
+                    startBtn.textContent = "START EXAM";
+                    startBtn.disabled = false;
+                }
+                systemCheck(); // Instantly update the Expiration Clock
+            })
+            .catch(err => {
+                // If the internet is slow or fails, unlock it with the 45min default
+                if(uiTimeLimit) uiTimeLimit.textContent = "45 Minutes (Default)";
+                if(startBtn) {
+                    startBtn.textContent = "START EXAM";
+                    startBtn.disabled = false;
+                }
+            });
+    }
+
+    // Call it immediately on page load
+    fetchExamSettings();
     
     function safeGet(key) { try { return localStorage.getItem(key); } catch(e) { return null; } }
     function safeSet(key,val) { try { localStorage.setItem(key,val); } catch(e) { } }
